@@ -1,6 +1,9 @@
 package com.infopouch.api.config;
 
+import java.util.ArrayList;
+import java.util.List;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.web.cors.CorsConfiguration;
@@ -12,21 +15,25 @@ import org.springframework.web.filter.CommonsRequestLoggingFilter;
 @Slf4j
 public class CorsAndSecurityHeadersConfig {
 
+  @Value("${app.frontend-url:http://localhost:3000}")
+  private String frontendUrl;
+
+  @Value("${app.base-url:http://localhost:8080}")
+  private String baseUrl;
+
   /** Security: Proper CORS configuration - restrict to known origins only */
   @Bean
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
 
-    // In production, set this from environment variable
-    configuration.setAllowedOrigins(
-        new java.util.ArrayList<>() {
-          {
-            add("http://localhost:3000"); // React dev server
-            add("http://localhost:8080"); // Backend dev
-            add("http://localhost:4200"); // Angular dev
-            // add("https://yourdomain.com"); // Production domain
-          }
-        });
+    List<String> allowedOrigins = new ArrayList<>(List.of(
+        "http://localhost:3000",
+        "http://localhost:8080",
+        "http://localhost:4200",
+        frontendUrl,
+        baseUrl));
+
+    configuration.setAllowedOrigins(allowedOrigins);
 
     configuration.setAllowedMethods(
         java.util.Arrays.asList("GET", "POST", "PUT", "DELETE", "OPTIONS", "PATCH"));

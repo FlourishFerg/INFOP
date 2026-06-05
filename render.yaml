@@ -18,7 +18,7 @@ services:
       - key: APP_BASE_URL
         sync: false
       - key: APP_FRONTEND_URL
-        sync: false
+        value: https://infopouch-frontend.infopouchafrica.workers.dev
       - key: REDIS_HOST
         sync: false
       - key: REDIS_PORT
