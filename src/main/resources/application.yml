@@ -1,0 +1,85 @@
+spring:
+  application:
+    name: infopouch-backend
+
+  mail:
+    host: ${MAIL_HOST:localhost}
+    port: ${MAIL_PORT:1025}
+    username: ${MAIL_USERNAME:test}
+    password: ${MAIL_PASSWORD:test}
+    properties:
+      mail:
+        smtp:
+          auth: ${MAIL_SMTP_AUTH:false}
+          starttls:
+            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
+          connectiontimeout: 10000
+          timeout: 10000
+          writetimeout: 10000
+
+  datasource:
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/infopouch_dev}
+    username: ${DATABASE_USERNAME:infopouch_app}
+    password: ${DATABASE_PASSWORD:MyinfoPouchpass#}
+    driver-class-name: org.postgresql.Driver
+
+  jpa:
+    open-in-view: false
+    database-platform: org.hibernate.dialect.PostgreSQLDialect
+
+    hibernate:
+      ddl-auto: validate
+
+    show-sql: false
+
+    properties:
+      hibernate:
+        format_sql: true
+
+        jdbc:
+          batch_size: 25
+
+  flyway:
+    enabled: true
+    baseline-on-migrate: true
+    baseline-version: 0
+
+  data:
+    redis:
+      host: ${REDIS_HOST:localhost}
+      port: ${REDIS_PORT:6379}
+
+server:
+  port: 8080
+
+  error:
+    include-message: always
+    include-binding-errors: always
+
+springdoc:
+  api-docs:
+    path: /v3/api-docs
+
+  swagger-ui:
+    path: /swagger-ui.html
+
+# =========================================================
+# APPLICATION CONFIGURATION
+# =========================================================
+
+app:
+  base-url: ${APP_BASE_URL:http://localhost:8080}
+  frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}
+
+# =========================================================
+# JWT CONFIGURATION
+# =========================================================
+
+jwt:
+  secret: ${JWT_SECRET:7f3c8a7d2b6e4f1c9a8b7d6e5f4a3c2b1d0e9f8a7c6b5d4e3f2a1c0b9d2g7f6}
+
+  # 15 minutes
+  access-expiration: 900000
+
+  # 7 days
+  refresh-expiration: 604800000

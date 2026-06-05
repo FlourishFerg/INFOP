@@ -1,0 +1,18 @@
+server:
+  port: 8080
+
+spring:
+  datasource:
+    url: jdbc:postgresql://localhost:5432/infopouch_dev
+    username: infopouch_admin
+    password: secure_dev_password_2026
+  jpa:
+    hibernate:
+      ddl-auto: update # Convenient for fast local iteration
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+jwt:
+  secret: local_development_only_insecure_fallback_key_string_256_bits
