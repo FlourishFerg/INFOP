@@ -26,12 +26,14 @@ public class CorsAndSecurityHeadersConfig {
   public CorsConfigurationSource corsConfigurationSource() {
     CorsConfiguration configuration = new CorsConfiguration();
 
-    List<String> allowedOrigins = new ArrayList<>(List.of(
-        "http://localhost:3000",
-        "http://localhost:8080",
-        "http://localhost:4200",
-        frontendUrl,
-        baseUrl));
+    List<String> allowedOrigins =
+        new ArrayList<>(
+            List.of(
+                "http://localhost:3000",
+                "http://localhost:8080",
+                "http://localhost:4200",
+                frontendUrl,
+                baseUrl));
 
     configuration.setAllowedOrigins(allowedOrigins);
 
