@@ -26,7 +26,7 @@ public class LocalEmailService {
   private String fromAddress;
 
   public void sendVerificationEmail(String email, String token) {
-    String verificationLink = baseUrl + "/api/v1/auth/verify?token=" + token;
+    String verificationLink = frontendUrl + "/verify-email?token=" + token;
     String subject = "Verify your InfoPouch account";
     String body =
         "<h2>Welcome to InfoPouch!</h2>"
