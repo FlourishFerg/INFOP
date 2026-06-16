@@ -9,6 +9,8 @@ spring:
   jpa:
     hibernate:
       ddl-auto: update # Convenient for fast local iteration
+  flyway:
+    enabled: false # dev uses ddl-auto: update instead
   data:
     redis:
       host: localhost

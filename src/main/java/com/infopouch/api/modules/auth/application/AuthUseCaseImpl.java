@@ -3,9 +3,7 @@ package com.infopouch.api.modules.auth.application;
 import com.infopouch.api.modules.auth.domain.AuthToken;
 import com.infopouch.api.modules.auth.presentation.dto.*;
 import com.infopouch.api.modules.notifications.application.LocalEmailService;
-import com.infopouch.api.modules.users.domain.MembershipTier;
 import com.infopouch.api.modules.users.domain.Profile;
-import com.infopouch.api.modules.users.domain.ProfileType;
 import com.infopouch.api.modules.users.domain.Role;
 import com.infopouch.api.modules.users.domain.User;
 import com.infopouch.api.modules.users.infrastructure.JpaAuthTokenRepository;
@@ -37,11 +35,6 @@ public class AuthUseCaseImpl implements AuthUseCase {
       throw new IllegalArgumentException("Email address is already registered.");
     }
 
-    if (request.profileType() == ProfileType.GUEST
-        && request.membershipTier() == MembershipTier.PREMIUM) {
-      throw new IllegalArgumentException("Guest accounts cannot be premium.");
-    }
-
     Role role =
         switch (request.profileType()) {
           case STUDENT -> Role.STUDENT;
@@ -61,22 +54,13 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     User savedUser = userRepository.save(user);
 
-    // 2. Map structural profile fields
+    // 2. Create the profile shell - membership tier and remaining details are
+    // collected in the Membership Selection and Profile Completion steps
     Profile profile =
         Profile.builder()
             .user(savedUser)
             .fullName(request.fullName())
-            .phoneNumber(request.phoneNumber())
-            .country(request.country())
-            .geopoliticalZone(request.geopoliticalZone())
-            .state(request.state())
-            .city(request.city())
-            .profession(request.profession())
             .profileType(request.profileType())
-            .membershipTier(request.membershipTier())
-            .academicQualification(request.academicQualification())
-            .gender(request.gender())
-            .dateOfBirth(request.dateOfBirth())
             .build();
 
     profileRepository.save(profile);
@@ -152,7 +136,18 @@ public class AuthUseCaseImpl implements AuthUseCase {
 
     authTokenRepository.save(sessionToken);
 
-    return new JwtResponse(accessToken, refreshToken, user.getId(), user.getEmail());
+    Profile profile =
+        profileRepository
+            .findByUserId(user.getId())
+            .orElseThrow(() -> new IllegalStateException("Profile not found for user."));
+
+    return new JwtResponse(
+        accessToken,
+        refreshToken,
+        user.getId(),
+        user.getEmail(),
+        profile.getMembershipTier(),
+        profile.isOnboardingCompleted());
   }
 
   @Override
@@ -176,7 +171,18 @@ public class AuthUseCaseImpl implements AuthUseCase {
     User user = savedToken.getUser();
     String newAccessToken = jwtService.generateAccessToken(user);
 
-    return new JwtResponse(newAccessToken, tokenValue, user.getId(), user.getEmail());
+    Profile profile =
+        profileRepository
+            .findByUserId(user.getId())
+            .orElseThrow(() -> new IllegalStateException("Profile not found for user."));
+
+    return new JwtResponse(
+        newAccessToken,
+        tokenValue,
+        user.getId(),
+        user.getEmail(),
+        profile.getMembershipTier(),
+        profile.isOnboardingCompleted());
   }
 
   @Override

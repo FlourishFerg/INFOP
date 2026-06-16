@@ -43,7 +43,7 @@ public class Profile {
   private ProfileType profileType;
 
   @Enumerated(EnumType.STRING)
-  @Column(name = "membership_type", nullable = false)
+  @Column(name = "membership_type")
   private MembershipTier membershipTier;
 
   @Column(name = "academic_qualification")
@@ -53,6 +53,9 @@ public class Profile {
 
   @Column(name = "date_of_birth")
   private LocalDate dateOfBirth;
+
+  @Column(name = "onboarding_completed", nullable = false)
+  private boolean onboardingCompleted;
 
   @Column(name = "created_at", updatable = false)
   private LocalDateTime createdAt;

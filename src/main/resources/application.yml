@@ -28,7 +28,7 @@ spring:
     database-platform: org.hibernate.dialect.PostgreSQLDialect
 
     hibernate:
-      ddl-auto: validate
+      ddl-auto: none
 
     show-sql: false
 
@@ -41,6 +41,10 @@ spring:
 
   flyway:
     enabled: true
+    url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/infopouch_dev}
+    user: ${DATABASE_USERNAME:infopouch_app}
+    password: ${DATABASE_PASSWORD:MyinfoPouchpass#}
+    locations: classpath:db/migration
     baseline-on-migrate: true
     baseline-version: 0
 
