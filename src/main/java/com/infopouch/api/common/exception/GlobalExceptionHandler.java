@@ -84,7 +84,9 @@ public class GlobalExceptionHandler {
     String fieldError =
         ex.getBindingResult().getFieldErrors().isEmpty()
             ? "Validation failed"
-            : ex.getBindingResult().getFieldErrors().get(0).getDefaultMessage();
+            : ex.getBindingResult().getFieldErrors().stream()
+                .map(e -> e.getField() + ": " + e.getDefaultMessage())
+                .collect(java.util.stream.Collectors.joining(", "));
 
     log.debug("[{}] Validation error: {}", traceId, fieldError);
 
