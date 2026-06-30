@@ -1,20 +1,27 @@
 package com.infopouch.api.modules.notifications.application;
 
-import jakarta.mail.MessagingException;
-import jakarta.mail.internet.MimeMessage;
-import lombok.RequiredArgsConstructor;
+import java.util.List;
+import java.util.Map;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.mail.javamail.JavaMailSender;
-import org.springframework.mail.javamail.MimeMessageHelper;
+import org.springframework.http.MediaType;
 import org.springframework.stereotype.Service;
+import org.springframework.web.client.RestClient;
+import org.springframework.web.client.RestClientException;
 
+/**
+ * Sends email via Resend's HTTP API rather than raw SMTP. Several hosting platforms (e.g. Railway's
+ * free tier) block outbound SMTP ports to prevent spam abuse, which an HTTPS-based API call isn't
+ * subject to.
+ */
 @Service
 @Slf4j
-@RequiredArgsConstructor
 public class LocalEmailService {
 
-  private final JavaMailSender mailSender;
+  // Built directly rather than via an injected RestClient.Builder - Spring Boot 4.0
+  // doesn't reliably auto-configure that bean (similar to the FlywayAutoConfiguration
+  // removal elsewhere in this app), and this avoids depending on it.
+  private final RestClient restClient = RestClient.create();
 
   @Value("${app.base-url}")
   private String baseUrl;
@@ -22,7 +29,10 @@ public class LocalEmailService {
   @Value("${app.frontend-url:${app.base-url}}")
   private String frontendUrl;
 
-  @Value("${app.mail.from:demo@infopouch.com}")
+  @Value("${resend.api-key}")
+  private String apiKey;
+
+  @Value("${resend.from-address:onboarding@resend.dev}")
   private String fromAddress;
 
   public void sendVerificationEmail(String email, String token) {
@@ -79,15 +89,21 @@ public class LocalEmailService {
 
   private void sendEmail(String recipient, String subject, String htmlBody) {
     try {
-      MimeMessage message = mailSender.createMimeMessage();
-      MimeMessageHelper helper = new MimeMessageHelper(message, "UTF-8");
-      helper.setFrom(fromAddress);
-      helper.setTo(recipient);
-      helper.setSubject(subject);
-      helper.setText(htmlBody, true);
-      mailSender.send(message);
+      restClient
+          .post()
+          .uri("https://api.resend.com/emails")
+          .header("Authorization", "Bearer " + apiKey)
+          .contentType(MediaType.APPLICATION_JSON)
+          .body(
+              Map.of(
+                  "from", fromAddress,
+                  "to", List.of(recipient),
+                  "subject", subject,
+                  "html", htmlBody))
+          .retrieve()
+          .toBodilessEntity();
       log.info("Email sent successfully to: {}", recipient);
-    } catch (MessagingException exception) {
+    } catch (RestClientException exception) {
       log.error("Failed to send email to {}", recipient, exception);
       throw new IllegalStateException("Unable to send email", exception);
     }

@@ -27,15 +27,7 @@ services:
         sync: false
       - key: REDIS_SSL
         value: "true"
-      - key: MAIL_HOST
+      - key: RESEND_API_KEY
         sync: false
-      - key: MAIL_PORT
+      - key: RESEND_FROM_ADDRESS
         sync: false
-      - key: MAIL_USERNAME
-        sync: false
-      - key: MAIL_PASSWORD
-        sync: false
-      - key: MAIL_SMTP_AUTH
-        value: "true"
-      - key: MAIL_SMTP_STARTTLS_ENABLE
-        value: "true"

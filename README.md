@@ -7,7 +7,7 @@ This repository contains the InfoPouch backend application.
 - Spring Boot backend with JWT authentication
 - User registration and email verification
 - Login, refresh token, forgot password, reset password, and logout flows
-- Local SMTP support via Mailpit for email testing
+- Email sent via the Resend HTTP API (works on hosts that block outbound SMTP, e.g. Railway's free tier)
 - Postman-ready endpoints for demo and validation
 
 ## Requirements
@@ -15,7 +15,7 @@ This repository contains the InfoPouch backend application.
 - Java 21 installed
 - Maven wrapper available in the repository
 - PostgreSQL and Redis available via Docker Compose
-- Docker installed for Mailpit
+- A Resend account and API key (free, no card required) - https://resend.com
 
 ## Local setup
 
@@ -25,12 +25,12 @@ This repository contains the InfoPouch backend application.
     cd C:\Users\DELL\Desktop\InfopouchBackend
     docker-compose up -d
 
-2. Start Mailpit for local email testing
+2. Get a Resend API key
 
-    powershell
-    docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
-
-Open Mailpit UI at http://localhost:8025.
+   Sign up at https://resend.com, go to API Keys -> Create API Key, and set it as the
+   `RESEND_API_KEY` environment variable. No domain verification needed for local testing -
+   the default sandbox sender (`onboarding@resend.dev`) works immediately, but can only send to
+   the email address on your Resend account until you verify a domain.
 
 3. Run the backend
 
@@ -65,10 +65,10 @@ Valid values:
 
 ### 2. Verify email
 
-After registration, Mailpit will receive a verification email.
+After registration, a verification email is sent via Resend to the registered address.
 
-1. Open http://localhost:8025
-2. Find the latest verification email
+1. Check the inbox of the email you registered with
+2. Open the verification email
 3. Copy the verification link or token
 4. In Postman use:
    - Method: GET
@@ -161,11 +161,11 @@ frontend can re-check onboarding status at any time (e.g. on app load).
       email: test@example.com
     }
 
-After this request Mailpit will receive a reset email containing a clickable link with a short-lived token.
+After this request a reset email is sent via Resend, containing a clickable link with a short-lived token.
 
 Default email link target:
 - If you have a frontend: the link points to `FRONTEND_URL/reset-password?token=...` (default `http://localhost:3000`).
-- If you don't have a frontend: you can still copy the token from Mailpit and use the API directly.
+- If you don't have a frontend: you can still copy the token from the email and use the API directly.
 
 ### 9. Reset password
 
@@ -183,7 +183,7 @@ Recommended (click-to-reset) flow:
 2. Frontend calls `GET /api/v1/auth/reset/validate?token=...` to confirm the token is valid.
 3. Frontend shows a password form and then POSTs to `/api/v1/auth/reset-password` with `{ token, newPassword }`.
 
-If you do not have a frontend, copy the token from Mailpit and call the POST `/api/v1/auth/reset-password` directly.
+If you do not have a frontend, copy the token from the email and call the POST `/api/v1/auth/reset-password` directly.
 
 ### 10. Logout
 
@@ -202,12 +202,12 @@ These endpoints send test verification or reset emails directly.
 - Method: POST
 - URL: http://localhost:8080/api/v1/email/send-reset?recipient=test@example.com
 
-Then confirm the message appears in Mailpit UI.
+Then confirm delivery on your Resend dashboard, or check the recipient inbox.
 
 ## Notes
 
 - Use Content-Type: application/json for all POST requests.
-- The default SMTP config is already set for Mailpit in src/main/resources/application.yml.
+- Email config (`RESEND_API_KEY`, `RESEND_FROM_ADDRESS`) defaults to Resend's sandbox sender in src/main/resources/application.yml. Until a domain is verified on Resend, emails can only be sent to the address on your own Resend account.
  - New config: `app.frontend-url` controls where password reset links point. Default is `http://localhost:3000`. You can override it with the `APP_FRONTEND_URL` env var or set in `application.yml`.
 - If you get a validation error, check the field names and enum values.
 
@@ -217,11 +217,6 @@ Then confirm the message appears in Mailpit UI.
     cd C:\Users\DELL\Desktop\InfopouchBackend
     .\mvnw -q -DskipTests compile
     .\mvnw spring-boot:run
-
-For Mailpit:
-
-    powershell
-    docker run -d --name mailpit -p 1025:1025 -p 8025:8025 axllent/mailpit
 
 For local database support:
 

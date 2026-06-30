@@ -2,21 +2,6 @@ spring:
   application:
     name: infopouch-backend
 
-  mail:
-    host: ${MAIL_HOST:localhost}
-    port: ${MAIL_PORT:1025}
-    username: ${MAIL_USERNAME:test}
-    password: ${MAIL_PASSWORD:test}
-    properties:
-      mail:
-        smtp:
-          auth: ${MAIL_SMTP_AUTH:false}
-          starttls:
-            enable: ${MAIL_SMTP_STARTTLS_ENABLE:false}
-          connectiontimeout: 10000
-          timeout: 10000
-          writetimeout: 10000
-
   datasource:
     url: ${DATABASE_URL:jdbc:postgresql://localhost:5432/infopouch_dev}
     username: ${DATABASE_USERNAME:infopouch_app}
@@ -74,6 +59,14 @@ springdoc:
 app:
   base-url: ${APP_BASE_URL:http://localhost:8080}
   frontend-url: ${APP_FRONTEND_URL:http://localhost:3000}
+
+# =========================================================
+# EMAIL (RESEND) CONFIGURATION
+# =========================================================
+
+resend:
+  api-key: ${RESEND_API_KEY:}
+  from-address: ${RESEND_FROM_ADDRESS:onboarding@resend.dev}
 
 # =========================================================
 # JWT CONFIGURATION
