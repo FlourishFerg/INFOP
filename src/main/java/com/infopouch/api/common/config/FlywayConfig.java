@@ -4,6 +4,7 @@ import org.flywaydb.core.Flyway;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.context.annotation.Lazy;
 import org.springframework.core.env.Environment;
 
 /**
@@ -14,7 +15,12 @@ import org.springframework.core.env.Environment;
 @ConditionalOnProperty(name = "spring.flyway.enabled", matchIfMissing = false)
 public class FlywayConfig {
 
+  // Nothing else injects a Flyway bean - it exists purely for the migrate() side effect
+  // in this method. With spring.main.lazy-initialization=true (set in prod for faster
+  // cold starts), Spring would never instantiate it since nothing depends on it, silently
+  // skipping migrations entirely. Force it eager regardless of the global lazy-init setting.
   @Bean
+  @Lazy(false)
   public Flyway flyway(Environment env) {
     String url = env.getProperty("spring.flyway.url", env.getProperty("spring.datasource.url", ""));
     String user =
