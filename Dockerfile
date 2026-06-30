@@ -16,5 +16,9 @@ COPY --from=build /app/target/backend-0.0.1-SNAPSHOT.jar app.jar
 
 EXPOSE 8080
 
-# -Xmx256m keeps memory within Koyeb's 512MB free tier limit
-ENTRYPOINT ["java", "-Xms16m", "-Xmx128m", "-XX:MaxMetaspaceSize=80m", "-XX:+UseSerialGC", "-XX:CompressedClassSpaceSize=32m", "-XX:TieredStopAtLevel=1", "-noverify", "-jar", "app.jar"]
+# Tuned to fit a 512MB free-tier container. The previous MaxMetaspaceSize=80m /
+# CompressedClassSpaceSize=32m was too tight for Spring Boot 4 + Hibernate + Spring
+# Security + JPA + Redis + springdoc, which load a large number of classes and lambda
+# proxies at runtime, and crashed the app with OutOfMemoryError: Metaspace shortly
+# after startup.
+ENTRYPOINT ["java", "-Xms32m", "-Xmx256m", "-XX:MaxMetaspaceSize=200m", "-XX:+UseSerialGC", "-XX:TieredStopAtLevel=1", "-jar", "app.jar"]
