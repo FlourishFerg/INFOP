@@ -53,6 +53,30 @@ public class LocalEmailService {
     sendEmail(email, subject, body);
   }
 
+  public void sendResearchApprovedEmail(String email, String researchTitle) {
+    String subject = "Your research submission has been approved";
+    String body =
+        "<h2>Submission Approved</h2>"
+            + "<p>Your research paper \""
+            + researchTitle
+            + "\" has been approved and is now published.</p>";
+    sendEmail(email, subject, body);
+  }
+
+  public void sendResearchRejectedEmail(String email, String researchTitle, String reason) {
+    String subject = "Your research submission requires changes";
+    String body =
+        "<h2>Submission Rejected</h2>"
+            + "<p>Your research paper \""
+            + researchTitle
+            + "\" was rejected for the following reason:</p>"
+            + "<p>"
+            + reason
+            + "</p>"
+            + "<p>You may edit and resubmit it from your dashboard.</p>";
+    sendEmail(email, subject, body);
+  }
+
   private void sendEmail(String recipient, String subject, String htmlBody) {
     try {
       MimeMessage message = mailSender.createMimeMessage();

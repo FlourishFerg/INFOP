@@ -62,4 +62,23 @@ public class ResearchController {
     researchUseCase.deleteResearch(id, userDetails.getUsername());
     return ResponseEntity.ok(ApiResponse.success("Research entry purged successfully."));
   }
+
+  /**
+   * View-only access for a logged-in user: returns the file's view URL but is never sent with an
+   * attachment disposition, since downloads must stay inside the account.
+   */
+  @GetMapping("/{id}/download")
+  public ResponseEntity<ApiResponse<ResearchResponse>> download(
+      @PathVariable String id, @AuthenticationPrincipal UserDetails userDetails) {
+    ResearchResponse response = researchUseCase.getViewableResearch(id, userDetails.getUsername());
+    return ResponseEntity.ok(
+        ApiResponse.success("Research ready for in-account viewing.", response));
+  }
+
+  @PostMapping("/{id}/share")
+  public ResponseEntity<ApiResponse<ShareLinkResponse>> share(
+      @PathVariable String id, @AuthenticationPrincipal UserDetails userDetails) {
+    ShareLinkResponse response = researchUseCase.createShareLink(id, userDetails.getUsername());
+    return ResponseEntity.ok(ApiResponse.success("Share link generated successfully.", response));
+  }
 }

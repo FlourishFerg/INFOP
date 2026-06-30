@@ -5,4 +5,6 @@ import com.infopouch.api.modules.research.presentation.dto.PresignedUrlResponse;
 
 public interface UploadUseCase {
   PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request);
+
+  String generateSignedViewUrl(String fileKey);
 }

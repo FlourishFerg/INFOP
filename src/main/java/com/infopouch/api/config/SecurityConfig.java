@@ -3,6 +3,7 @@ package com.infopouch.api.config;
 import lombok.RequiredArgsConstructor;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.security.config.annotation.method.configuration.EnableMethodSecurity;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
 import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
@@ -16,6 +17,7 @@ import org.springframework.web.cors.CorsConfigurationSource;
 
 @Configuration
 @EnableWebSecurity
+@EnableMethodSecurity
 @RequiredArgsConstructor
 public class SecurityConfig {
 
@@ -46,6 +48,9 @@ public class SecurityConfig {
                 auth.requestMatchers(
                         "/api/v1/auth/**",
                         "/api/v1/email/**", // Allow email test endpoints
+                        "/api/v1/research/public/**", // Public research catalog
+                        // (search/view/citation)
+                        "/api/v1/research/shared/**", // Public share-link resolution
                         "/v3/api-docs/**",
                         "/v3/api-docs.yaml",
                         "/v3/api-docs",

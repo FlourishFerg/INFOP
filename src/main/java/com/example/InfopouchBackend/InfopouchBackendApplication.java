@@ -10,13 +10,15 @@ import org.springframework.data.jpa.repository.config.EnableJpaRepositories;
     basePackages = {
       "com.infopouch.api.modules.users.infrastructure",
       "com.infopouch.api.modules.auth.infrastructure",
-      "com.infopouch.api.modules.research.infrastructure"
+      "com.infopouch.api.modules.research.infrastructure",
+      "com.infopouch.api.modules.notifications.infrastructure"
     })
 @EntityScan(
     basePackages = {
       "com.infopouch.api.modules.users.domain",
       "com.infopouch.api.modules.auth.domain",
-      "com.infopouch.api.modules.research.domain"
+      "com.infopouch.api.modules.research.domain",
+      "com.infopouch.api.modules.notifications.domain"
     })
 public class InfopouchBackendApplication {
 

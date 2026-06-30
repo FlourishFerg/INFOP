@@ -29,6 +29,27 @@ public class ResearchPaper {
   @Column(nullable = false, columnDefinition = "TEXT")
   private String abstractText;
 
+  @Column(nullable = false, columnDefinition = "TEXT")
+  private String authors;
+
+  @Column(nullable = false)
+  private String institution;
+
+  @Column(name = "publication_year", nullable = false)
+  private Integer publicationYear;
+
+  @Column(name = "research_field", nullable = false)
+  private String researchField;
+
+  @Column(name = "country_of_study", nullable = false)
+  private String countryOfStudy;
+
+  @Column(columnDefinition = "TEXT", nullable = false)
+  private String methodology;
+
+  @Column(name = "file_type", nullable = false, length = 20)
+  private String fileType;
+
   @Column(name = "file_key", nullable = false, length = 500)
   private String fileKey;
 

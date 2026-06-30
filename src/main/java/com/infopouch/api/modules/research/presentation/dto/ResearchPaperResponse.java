@@ -4,4 +4,10 @@ import com.infopouch.api.modules.research.domain.ResearchStatus;
 import java.time.LocalDateTime;
 
 public record ResearchPaperResponse(
-    String id, String title, ResearchStatus status, LocalDateTime createdAt) {}
+    String id,
+    String title,
+    String institution,
+    Integer publicationYear,
+    String researchField,
+    ResearchStatus status,
+    LocalDateTime createdAt) {}

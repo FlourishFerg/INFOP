@@ -10,6 +10,7 @@ import org.springframework.stereotype.Service;
 public class MockUploadService implements UploadUseCase {
 
   private static final long MAX_FILE_SIZE_BYTES = 15 * 1024 * 1024; // 15MB
+  private static final long VIEW_URL_VALIDITY_SECONDS = 60;
 
   @Override
   public PresignedUrlResponse generatePresignedUploadUrl(PresignedUrlRequest request) {
@@ -37,5 +38,19 @@ public class MockUploadService implements UploadUseCase {
     String downloadUrl = "https://infopouch-storage-mock.s3.eu-west-1.amazonaws.com/" + fileKey;
 
     return new PresignedUrlResponse(uploadUrl, fileKey, downloadUrl);
+  }
+
+  @Override
+  public String generateSignedViewUrl(String fileKey) {
+    // Minted fresh per authorized request and expires quickly so a leaked link goes dead fast;
+    // the caller is responsible for checking access before calling this.
+    long expiresAtEpochSeconds = (System.currentTimeMillis() / 1000) + VIEW_URL_VALIDITY_SECONDS;
+    return "https://infopouch-storage-mock.s3.eu-west-1.amazonaws.com/"
+        + fileKey
+        + "?X-Amz-Algorithm=AWS4-HMAC-SHA256&X-Amz-Credential=mock_key"
+        + "&X-Amz-Expires="
+        + VIEW_URL_VALIDITY_SECONDS
+        + "&X-Amz-Date="
+        + expiresAtEpochSeconds;
   }
 }

@@ -1,9 +1,11 @@
 package com.infopouch.api.common.exception;
 
+import io.jsonwebtoken.JwtException;
 import jakarta.servlet.http.HttpServletRequest;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.extern.slf4j.Slf4j;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.core.AuthenticationException;
@@ -54,6 +56,26 @@ public class GlobalExceptionHandler {
             .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
+  }
+
+  /** Security: Authenticated but lacks the required role/authority */
+  @ExceptionHandler(org.springframework.security.access.AccessDeniedException.class)
+  public ResponseEntity<ErrorResponse> handleAccessDeniedException(
+      org.springframework.security.access.AccessDeniedException ex, HttpServletRequest request) {
+    String traceId = UUID.randomUUID().toString();
+    log.warn("[{}] Access denied: {}", traceId, ex.getMessage());
+
+    ErrorResponse errorResponse =
+        ErrorResponse.builder()
+            .errorCode("AUTH_005")
+            .message("You do not have permission to perform this action.")
+            .status(HttpStatus.FORBIDDEN.value())
+            .timestamp(LocalDateTime.now())
+            .path(request.getRequestURI())
+            .traceId(traceId)
+            .build();
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.FORBIDDEN);
   }
 
   /** Security: Resource not found - don't reveal what exists or not */
@@ -176,6 +198,46 @@ public class GlobalExceptionHandler {
             .build();
 
     return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  /** Security: Unique constraint races (e.g. duplicate email under concurrent registration) */
+  @ExceptionHandler(DataIntegrityViolationException.class)
+  public ResponseEntity<ErrorResponse> handleDataIntegrityViolation(
+      DataIntegrityViolationException ex, HttpServletRequest request) {
+    String traceId = UUID.randomUUID().toString();
+    log.warn("[{}] Data integrity violation: {}", traceId, ex.getMessage());
+
+    ErrorResponse errorResponse =
+        ErrorResponse.builder()
+            .errorCode("CONFLICT_001")
+            .message("This record already exists or conflicts with existing data.")
+            .status(HttpStatus.CONFLICT.value())
+            .timestamp(LocalDateTime.now())
+            .path(request.getRequestURI())
+            .traceId(traceId)
+            .build();
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.CONFLICT);
+  }
+
+  /** Security: Malformed/invalid/expired JWTs passed where a parsed claim is required */
+  @ExceptionHandler(JwtException.class)
+  public ResponseEntity<ErrorResponse> handleJwtException(
+      JwtException ex, HttpServletRequest request) {
+    String traceId = UUID.randomUUID().toString();
+    log.warn("[{}] JWT processing failed: {}", traceId, ex.getMessage());
+
+    ErrorResponse errorResponse =
+        ErrorResponse.builder()
+            .errorCode("AUTH_004")
+            .message("Invalid or expired token.")
+            .status(HttpStatus.UNAUTHORIZED.value())
+            .timestamp(LocalDateTime.now())
+            .path(request.getRequestURI())
+            .traceId(traceId)
+            .build();
+
+    return new ResponseEntity<>(errorResponse, HttpStatus.UNAUTHORIZED);
   }
 
   /** Security: Generic catch-all for unexpected exceptions - NEVER expose stack trace */
