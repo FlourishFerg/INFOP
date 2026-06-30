@@ -89,17 +89,24 @@ public class LocalEmailService {
 
   private void sendEmail(String recipient, String subject, String htmlBody) {
     try {
+      // Env vars pasted into hosting dashboards (Railway/Render) can pick up a
+      // trailing newline, which the JDK HTTP client rejects as an invalid header
+      // value - strip it defensively rather than failing on every send.
       restClient
           .post()
           .uri("https://api.resend.com/emails")
-          .header("Authorization", "Bearer " + apiKey)
+          .header("Authorization", "Bearer " + apiKey.strip())
           .contentType(MediaType.APPLICATION_JSON)
           .body(
               Map.of(
-                  "from", fromAddress,
-                  "to", List.of(recipient),
-                  "subject", subject,
-                  "html", htmlBody))
+                  "from",
+                  fromAddress.strip(),
+                  "to",
+                  List.of(recipient),
+                  "subject",
+                  subject,
+                  "html",
+                  htmlBody))
           .retrieve()
           .toBodilessEntity();
       log.info("Email sent successfully to: {}", recipient);
