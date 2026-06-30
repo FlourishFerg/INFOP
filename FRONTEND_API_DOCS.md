@@ -60,6 +60,7 @@ in error bodies — it doesn't.
 | `AUTH_001` / `AUTH_002` | 401 | Authentication failed (bad credentials at the security layer) |
 | `AUTH_003` | 400 | Invalid credentials or account state (e.g. wrong password, unverified email at login) |
 | `AUTH_004` | 401 | Malformed, invalid, or expired JWT |
+| `AUTH_005` | 403 | Authenticated, but lacks the required role (e.g. a non-admin calling an admin-only research endpoint) |
 | `STATE_001` | 409 | Operation conflicts with current state (e.g. login attempt before email verification) |
 | `CONFLICT_001` | 409 | Record already exists (e.g. duplicate email registration, including the rare case where two registrations for the same email race each other) |
 | `NOT_FOUND_001` | 404 | Requested resource doesn't exist |
@@ -105,6 +106,50 @@ interface ProfileResponse {
   isVerified: boolean;
   onboardingCompleted: boolean;
   createdAt: string;            // ISO datetime
+}
+
+type ResearchStatus = "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
+
+interface ResearchResponse {
+  id: string;
+  userId: string;
+  title: string;
+  authors: string[];
+  institution: string;
+  publicationYear: number;
+  researchField: string;
+  countryOfStudy: string;
+  methodology: string;
+  fileType: string;
+  abstractText: string;
+  fileUrl: string;              // signed, time-limited view URL — regenerated on every response
+  status: ResearchStatus;
+  rejectionReason: string | null;
+  keywords: string[];
+  createdAt: string;            // ISO datetime
+}
+
+// Slimmer shape used by list endpoints (own research, admin queue, public search)
+interface ResearchPaperResponse {
+  id: string;
+  title: string;
+  institution: string;
+  publicationYear: number;
+  researchField: string;
+  status: ResearchStatus;
+  createdAt: string;
+}
+
+interface ShareLinkResponse {
+  shareUrl: string;             // "<FRONTEND_URL>/research/shared/<token>"
+  token: string;
+  expiresAt: string;            // ISO datetime, 7 days from creation
+}
+
+interface PresignedUrlResponse {
+  uploadUrl: string;            // PUT the file directly here, bypassing the backend
+  fileKey: string;              // pass this into CreateResearchRequest.fileKey
+  downloadUrl: string;          // not generally needed — ResearchResponse.fileUrl is regenerated fresh
 }
 ```
 
@@ -467,6 +512,394 @@ which fields were filled. After a successful response, redirect the user to the 
 
 ---
 
+## Research Endpoints
+
+Submitting a research paper is a two-step flow: first get a presigned upload URL and upload the
+file directly to cloud storage, then create the research record referencing that file.
+
+```
+1. POST /api/v1/uploads/presigned-url  -> { uploadUrl, fileKey, downloadUrl }
+2. PUT <uploadUrl> with the raw file bytes (direct to cloud storage, not through this backend)
+3. POST /api/v1/research with fileKey + fileUrl (use downloadUrl from step 1) + the rest of the form
+```
+
+### 12. Get Presigned Upload URL
+
+```
+POST /api/v1/uploads/presigned-url
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Request body:**
+```json
+{
+  "fileName": "my-thesis.pdf",
+  "contentType": "application/pdf",
+  "fileSizeBytes": 2400000
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| fileName | string | Yes | |
+| contentType | string | Yes | e.g. `application/pdf` |
+| fileSizeBytes | number | Yes | |
+
+**Response:** `ApiResponse<PresignedUrlResponse>` — HTTP 200
+
+After getting `uploadUrl`, `PUT` the raw file bytes to it directly from the browser — do not
+proxy the file through this backend. Keep `fileKey` for step 3.
+
+---
+
+### 13. Create Research
+
+```
+POST /api/v1/research
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Request body:**
+```json
+{
+  "title": "Effects of X on Y",
+  "authors": ["Jane Doe", "John Smith"],
+  "institution": "University of Lagos",
+  "publicationYear": 2024,
+  "researchField": "Computer Science",
+  "countryOfStudy": "Nigeria",
+  "methodology": "Quantitative",
+  "fileType": "PDF",
+  "abstractText": "A sufficiently long abstract describing the research...",
+  "fileKey": "<from presigned-url response>",
+  "fileUrl": "<downloadUrl from presigned-url response>",
+  "fileSizeBytes": 2400000,
+  "keywords": ["machine learning", "education", "africa", "policy", "data"]
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| title | string | Yes | Max 255 chars |
+| authors | string[] | Yes | At least 1 |
+| institution | string | Yes | |
+| publicationYear | number | Yes | Between 1900–2100 |
+| researchField | string | Yes | |
+| countryOfStudy | string | Yes | |
+| methodology | string | Yes | |
+| fileType | string | Yes | |
+| abstractText | string | Yes | Minimum 20 chars |
+| fileKey | string | Yes | From the presigned-url step |
+| fileUrl | string | Yes | From the presigned-url step |
+| fileSizeBytes | number | Yes | |
+| keywords | string[] | Yes | **Minimum 5** — this is enforced server-side |
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 201
+
+New submissions always start at `status: "PENDING"` and are not publicly visible until an admin
+approves them.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 400 | `VALIDATION_001` | Missing/invalid field (including fewer than 5 keywords) |
+
+---
+
+### 14. List My Research
+
+```
+GET /api/v1/research
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Response:** `ApiResponse<ResearchPaperResponse[]>` — HTTP 200
+
+Returns only the authenticated user's own submissions, in the slim list shape (no abstract,
+authors, file URL, etc. — use endpoint 15 for full details on one item).
+
+---
+
+### 15. Get Research by ID
+
+```
+GET /api/v1/research/{id}
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID |
+
+---
+
+### 16. Update Research
+
+```
+PUT /api/v1/research/{id}
+```
+
+**Requires:** `Authorization: Bearer <accessToken>` (must be the owner)
+
+**Request body:** Same shape as Create Research (endpoint 13) — this replaces the whole record,
+not a partial patch.
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200
+
+Updating resets `status` back to `"PENDING"` and clears `rejectionReason` — the paper re-enters
+the review queue.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 400 | `VALIDATION_001` | Missing/invalid field |
+| 404 | `NOT_FOUND_001` | No research with this ID |
+| 409 | `STATE_001` | You're not the owner, **or** the paper is already `APPROVED` (approved papers can't be edited — block the edit UI for those) |
+
+---
+
+### 17. Delete Research
+
+```
+DELETE /api/v1/research/{id}
+```
+
+**Requires:** `Authorization: Bearer <accessToken>` (must be the owner)
+
+**Response:** `ApiResponse<null>` — HTTP 200
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID |
+| 409 | `STATE_001` | You're not the owner |
+
+---
+
+### 18. View/Download Research (own account)
+
+```
+GET /api/v1/research/{id}/download
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200, including a freshly-signed `fileUrl`
+
+Despite the name, this doesn't trigger a file download response — it returns the research record
+with a time-limited signed URL your frontend can open/embed. The owner can always access their
+own paper regardless of status; anyone else can only access it if `status === "APPROVED"`.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID, **or** you're not the owner and it isn't `APPROVED` yet |
+
+---
+
+### 19. Create Share Link
+
+```
+POST /api/v1/research/{id}/share
+```
+
+**Requires:** `Authorization: Bearer <accessToken>`
+
+**Response:** `ApiResponse<ShareLinkResponse>` — HTTP 200
+
+Generates a public, no-login-required link valid for **7 days**. The owner can share a paper in
+any status (including `PENDING`); a non-owner can only generate a share link for an already
+`APPROVED` paper. Anyone with the link can view it via endpoint 23, regardless of their own
+auth state — treat this like any other shareable link (don't put anything sensitive behind it
+beyond what the paper itself contains).
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID, **or** you're not the owner and it isn't `APPROVED` yet |
+
+---
+
+## Admin Research Endpoints
+
+All endpoints below require an **ADMIN** role, not just a logged-in user. A non-admin
+authenticated user gets a 403, distinct from the 401 an unauthenticated user gets.
+
+### 20. List Research by Status
+
+```
+GET /api/v1/admin/research?status=PENDING
+```
+
+**Requires:** `Authorization: Bearer <accessToken>` (ADMIN role)
+
+| Query param | Required | Notes |
+|---|---|---|
+| status | No | One of `PENDING`, `UNDER_REVIEW`, `APPROVED`, `REJECTED`. Defaults to `PENDING` |
+
+**Response:** `ApiResponse<ResearchPaperResponse[]>` — HTTP 200
+
+Use this to build the admin review queue — default view (no query param) shows what's awaiting
+review.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 403 | `AUTH_005` | Authenticated but not an admin |
+
+---
+
+### 21. Approve Research
+
+```
+POST /api/v1/admin/research/{id}/approve
+```
+
+**Requires:** `Authorization: Bearer <accessToken>` (ADMIN role)
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200, `status` becomes `"APPROVED"`
+
+Triggers an in-app notification and an email to the researcher. Once approved, the paper becomes
+publicly visible (endpoints 22–25) and the owner can no longer edit it (endpoint 16).
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID |
+| 403 | `AUTH_005` | Authenticated but not an admin |
+
+---
+
+### 22. Reject Research
+
+```
+POST /api/v1/admin/research/{id}/reject
+```
+
+**Requires:** `Authorization: Bearer <accessToken>` (ADMIN role)
+
+**Request body:**
+```json
+{
+  "reason": "Methodology section needs more detail on sample size."
+}
+```
+
+| Field | Type | Required | Notes |
+|---|---|---|---|
+| reason | string | Yes | Shown to the researcher |
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200, `status` becomes `"REJECTED"`,
+`rejectionReason` set to the given reason
+
+Triggers an in-app notification and an email to the researcher including the reason. The
+researcher can edit and resubmit (endpoint 16), which resets status back to `PENDING`.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 400 | `VALIDATION_001` | Missing/blank `reason` |
+| 404 | `NOT_FOUND_001` | No research with this ID |
+| 403 | `AUTH_005` | Authenticated but not an admin |
+
+---
+
+## Public Research Endpoints
+
+These don't require authentication — safe to call from a logged-out landing page. All of them
+(except the share-link one) only ever return papers with `status === "APPROVED"`.
+
+### 23. Search Public Research Catalog
+
+```
+GET /api/v1/research/public/search
+```
+
+| Query param | Required | Notes |
+|---|---|---|
+| query | No | Free-text, case-insensitive substring match |
+| researchField | No | |
+| institution | No | |
+| year | No | Publication year |
+| country | No | Country of study |
+
+All filters are optional and combine (AND) when multiple are present; omit all for the full
+approved catalog.
+
+**Response:** `ApiResponse<ResearchPaperResponse[]>` — HTTP 200
+
+---
+
+### 24. View Public Research
+
+```
+GET /api/v1/research/public/{id}
+```
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200, including a freshly-signed `fileUrl`
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | No research with this ID, **or** it isn't `APPROVED` |
+
+---
+
+### 25. Generate Citation
+
+```
+GET /api/v1/research/public/{id}/citation?format=APA
+```
+
+| Query param | Required | Notes |
+|---|---|---|
+| format | No | `APA` or `MLA` (case-insensitive). Defaults to `APA` |
+
+**Response:** `ApiResponse<string>` — HTTP 200, `data` is the formatted citation string, e.g.:
+```json
+{
+  "success": true,
+  "message": "Citation generated.",
+  "data": "Doe, J., & Smith, J. (2024). Effects of X on Y. University of Lagos."
+}
+```
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 400 | `VALIDATION_002` | `format` is something other than `APA`/`MLA` |
+| 404 | `NOT_FOUND_001` | No research with this ID, **or** it isn't `APPROVED` |
+
+---
+
+### 26. View Shared Research
+
+```
+GET /api/v1/research/shared/{token}
+```
+
+The `token` comes from a share link generated via endpoint 19 (the part after
+`/research/shared/` in `shareUrl`).
+
+**Response:** `ApiResponse<ResearchResponse>` — HTTP 200, including a freshly-signed `fileUrl`
+
+Unlike the other public endpoints, this works for a paper in **any** status, since the share link
+itself (not approval status) is what grants access.
+
+**Failure cases:**
+| Status | error_code | When |
+|---|---|---|
+| 404 | `NOT_FOUND_001` | Token doesn't exist, **or** it's expired (7 days after creation) |
+
+---
+
 ## Updated Service Files
 
 ### `auth.service.ts`
@@ -613,6 +1046,125 @@ export default profileService;
 
 ---
 
+### `research.service.ts`
+
+```typescript
+import api from "@/lib/axios";
+
+export type ResearchStatus = "PENDING" | "UNDER_REVIEW" | "APPROVED" | "REJECTED";
+
+export interface ResearchResponse {
+  id: string;
+  userId: string;
+  title: string;
+  authors: string[];
+  institution: string;
+  publicationYear: number;
+  researchField: string;
+  countryOfStudy: string;
+  methodology: string;
+  fileType: string;
+  abstractText: string;
+  fileUrl: string;
+  status: ResearchStatus;
+  rejectionReason: string | null;
+  keywords: string[];
+  createdAt: string;
+}
+
+export interface ResearchPaperResponse {
+  id: string;
+  title: string;
+  institution: string;
+  publicationYear: number;
+  researchField: string;
+  status: ResearchStatus;
+  createdAt: string;
+}
+
+export interface ShareLinkResponse {
+  shareUrl: string;
+  token: string;
+  expiresAt: string;
+}
+
+export interface PresignedUrlResponse {
+  uploadUrl: string;
+  fileKey: string;
+  downloadUrl: string;
+}
+
+export interface CreateResearchPayload {
+  title: string;
+  authors: string[];
+  institution: string;
+  publicationYear: number;
+  researchField: string;
+  countryOfStudy: string;
+  methodology: string;
+  fileType: string;
+  abstractText: string;
+  fileKey: string;
+  fileUrl: string;
+  fileSizeBytes: number;
+  keywords: string[]; // minimum 5
+}
+
+export interface PresignedUrlPayload {
+  fileName: string;
+  contentType: string;
+  fileSizeBytes: number;
+}
+
+const researchService = {
+  getPresignedUploadUrl: (payload: PresignedUrlPayload) =>
+    api.post<ApiResponse<PresignedUrlResponse>>("/uploads/presigned-url", payload),
+
+  createResearch: (payload: CreateResearchPayload) =>
+    api.post<ApiResponse<ResearchResponse>>("/research", payload),
+
+  getMyResearch: () =>
+    api.get<ApiResponse<ResearchPaperResponse[]>>("/research"),
+
+  getResearchById: (id: string) =>
+    api.get<ApiResponse<ResearchResponse>>(`/research/${id}`),
+
+  updateResearch: (id: string, payload: CreateResearchPayload) =>
+    api.put<ApiResponse<ResearchResponse>>(`/research/${id}`, payload),
+
+  deleteResearch: (id: string) =>
+    api.delete<ApiResponse<null>>(`/research/${id}`),
+
+  viewResearch: (id: string) =>
+    api.get<ApiResponse<ResearchResponse>>(`/research/${id}/download`),
+
+  createShareLink: (id: string) =>
+    api.post<ApiResponse<ShareLinkResponse>>(`/research/${id}/share`),
+
+  // Public, no auth required
+  searchPublic: (params: {
+    query?: string;
+    researchField?: string;
+    institution?: string;
+    year?: number;
+    country?: string;
+  }) => api.get<ApiResponse<ResearchPaperResponse[]>>("/research/public/search", { params }),
+
+  viewPublic: (id: string) =>
+    api.get<ApiResponse<ResearchResponse>>(`/research/public/${id}`),
+
+  getCitation: (id: string, format: "APA" | "MLA" = "APA") =>
+    api.get<ApiResponse<string>>(`/research/public/${id}/citation`, { params: { format } }),
+
+  viewShared: (token: string) =>
+    api.get<ApiResponse<ResearchResponse>>(`/research/shared/${token}`),
+};
+
+export default researchService;
+```
+
+---
+
 ## Fields Removed from Old Contract
 
 The following fields that existed in the old `RegisterPayload` and `ProfilePayload` no longer
@@ -639,3 +1191,5 @@ exist or have been renamed. Update any forms or state that reference them:
 | `PUT /profile/me` (updateProfile) | Removed | Use `/profile/membership` and `/profile/complete` |
 
 ---
+
+*Generated against backend commit `2345f08` — InfoPouch Backend v0.0.1*
