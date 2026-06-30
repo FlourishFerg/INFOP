@@ -13,12 +13,14 @@ import com.infopouch.api.security.JwtService;
 import java.time.LocalDateTime;
 import java.util.UUID;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 @RequiredArgsConstructor
+@Slf4j
 public class AuthUseCaseImpl implements AuthUseCase {
 
   private final JpaUserRepository userRepository;
@@ -88,7 +90,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
             .findByTokenValue(token)
             .orElseThrow(() -> new IllegalArgumentException("Invalid verification token."));
 
-    if (!"VERIFICATION".equals(authToken.getTokenType())) {
+    if (!"VERIFICATION".equals(authToken.getTokenType()) || authToken.isRevoked()) {
       throw new IllegalArgumentException("Invalid token context.");
     }
 
@@ -164,8 +166,8 @@ public class AuthUseCaseImpl implements AuthUseCase {
       throw new IllegalArgumentException("Refresh token has expired or been revoked.");
     }
 
-    if (!jwtService.isRefreshToken(tokenValue)) {
-      throw new IllegalArgumentException("Malformed token type mapping.");
+    if (!"REFRESH".equals(savedToken.getTokenType())) {
+      throw new IllegalArgumentException("Provided token is not a valid refresh token.");
     }
 
     User user = savedToken.getUser();
@@ -205,7 +207,13 @@ public class AuthUseCaseImpl implements AuthUseCase {
                       .build();
 
               authTokenRepository.save(resetToken);
-              emailService.sendPasswordResetEmail(user.getEmail(), tokenValue);
+              try {
+                emailService.sendPasswordResetEmail(user.getEmail(), tokenValue);
+              } catch (Exception ex) {
+                // Swallow send failures here: surfacing them would let callers infer
+                // whether the email exists based on success vs. failure responses.
+                log.error("Failed to send password reset email to {}", user.getEmail(), ex);
+              }
             });
   }
 
@@ -218,7 +226,7 @@ public class AuthUseCaseImpl implements AuthUseCase {
             .orElseThrow(
                 () -> new IllegalArgumentException("Invalid or expired password reset link."));
 
-    if (!"PASSWORD_RESET".equals(tokenRecord.getTokenType())) {
+    if (!"PASSWORD_RESET".equals(tokenRecord.getTokenType()) || tokenRecord.isRevoked()) {
       throw new IllegalArgumentException("Invalid token context.");
     }
 
